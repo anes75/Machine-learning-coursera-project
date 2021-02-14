@@ -1,0 +1,99 @@
+---
+title: "Machine Learning Project"
+author: "Anes"
+date: "14 02 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Executive Summary
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+The original assignment text is [here](https://www.coursera.org/learn/practical-machine-learning/peer/R43St/prediction-assignment-writeup)
+
+## Loading libraries, Reading train and test data, set random generator seed
+```{r reading, echo=TRUE, cache=TRUE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(dplyr)
+
+trainData <- read.csv2('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv', sep = ',')
+testData <- read.csv2('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', sep = ',')
+
+set.seed(1111)
+```
+## Models applied in the project
+
+Two models will be applied: **decision tree** and **random forest**.
+Cross-validation will be performed by random subsampling *trainData* into two subsamples: *subTrainData* (60% of the original *trainData*) and *subTestData* (40%). The models will be fitted on the *subTrainData* and tested on the *subTestData*. The most accurate model will be tested on the original *testData*.
+
+## Partitioning the trainData into subTrainData and subTestData
+```{r partitioning, echo=TRUE}
+inTrain <- createDataPartition(y=trainData$classe, p=0.6, list=FALSE)
+subTrainData <- trainData[inTrain, ]
+subTestData <- trainData[-inTrain, ]
+dim(subTrainData)
+dim(subTestData)
+```
+
+## Remove variables that have near zero variance
+```{r NZV, echo=TRUE}
+NZV_variables <- nearZeroVar(subTrainData, saveMetrics=TRUE)
+NZV_variables <- rownames(filter(NZV_variables, nzv==TRUE))
+subTrainDataNames <- setdiff(names(subTrainData),NZV_variables)
+subTrainData <- select(subTrainData, all_of(subTrainDataNames))
+```
+## Remove ID, names, time variables 
+```{r removeExtraVar, echo=TRUE}
+subTrainData <- select(subTrainData, -c(1:6))
+```
+## Remove variables with too many NA
+```{r removeNA, echo=TRUE}
+subTrainData <- subTrainData[, colSums(is.na(subTrainData))/nrow(subTrainData) < 0.6]
+```
+
+## Remove unnecessary variables from subTestData and testData
+```{r cleanSubTestData, echo=TRUE}
+subTestData <- subTestData[, names(subTrainData)]
+testData <- testData[, setdiff(names(subTrainData),'classe')]
+```
+## Convert variables to numeric
+```{r convert, echo=TRUE}
+subTrainData[,c(1:52)] <- sapply(subTrainData[,c(1:52)],as.numeric)
+subTestData[,c(1:52)] <- sapply(subTestData[,c(1:52)],as.numeric)
+testData[,c(1:52)] <- sapply(testData[,c(1:52)],as.numeric)
+```
+
+# Predicting
+
+## using Decision Tree
+```{r DecisionTree, echo=TRUE}
+
+fitTree <- rpart(classe ~ ., data=subTrainData, method="class")
+predictionTree <- predict(fitTree, subTestData, type = "class")
+```
+
+## using Random Forests
+```{r RandomForests, echo=TRUE}
+fitForests <- randomForest(classe ~ ., data=subTrainData)
+predictionForests <- predict(fitForests, subTestData, type = "class")
+```
+
+## Compare results
+```{r compare, echo=TRUE}
+confusionMatrix(predictionTree, subTestData$classe)
+confusionMatrix(predictionForests, subTestData$classe)
+```
+## Conclusion
+Random Forests algorithm provided results with significantly higher accuracy.
+Let's predict Classes using Random Forests model on the original test data set *testData*:
+```{r originalTesting, echo=TRUE}
+predictionForests <- predict(fitForests, testData, type = "class")
+predictionForests
+
+```
+
